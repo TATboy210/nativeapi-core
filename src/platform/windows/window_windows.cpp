@@ -412,12 +412,32 @@ static void ApplyTaskbarVisibility(HWND hwnd, bool is_visible) {
 }
 
 #ifndef NATIVEAPI_ENABLE_WINUI3
+// Windows 11 draws one thin border around the whole window, client area included;
+// earlier versions draw the frame only where the window still has non-client area.
+constexpr DWORD kBuildUniformWindowBorder = 22000;
+
 // Keep the native sizing/caption styles, but give the top non-client band to the
 // content (WM_NCCALCSIZE) when the title bar is hidden. While the compositor draws the
 // frame the rest of the sizing frame remains, and the top edge stays resizable through
 // hit testing: the window answers HTTOP there, and child windows covering the content
 // let the hit test through to it. Without the compositor's frame (no shadow, a custom
 // shadow, a shape) the content takes the whole window and every edge is hit-tested so.
+
+// Height of the top sizing frame left to the system while the title bar is hidden, in
+// physical pixels. Before Windows 11 the compositor draws the window border only on the
+// non-client area, so giving the whole caption band to the content (WM_NCCALCSIZE) takes
+// the top border with it while the left, right and bottom ones stay - windows hidden this
+// way on Windows 10 then show three sides of a frame and no top (window_manager#547). The
+// visible border is the outermost pixel of that frame at every scale, so one pixel is all
+// the compositor needs; the sizing frame inside it grows with the DPI but is invisible.
+// The content stops at the same line because it is laid out in the client area. Windows 11
+// draws the border over the client area itself, where an extra strip would only move the
+// content down.
+static int HiddenTopBorderInset() {
+  if (WindowsBuildNumber() >= kBuildUniformWindowBorder)
+    return 0;
+  return 1;
+}
 
 // The resize hit code for a screen point on a resize edge of `root` that the system no
 // longer hit-tests itself, or 0.
@@ -586,10 +606,11 @@ static std::optional<LRESULT> HandleHiddenTitleBarFrame(HWND hwnd, UINT message,
     auto* proposed = reinterpret_cast<RECT*>(lp);
     const RECT window = *proposed;
     const LRESULT result = DefSubclassProc(hwnd, message, wp, lp);
+    const bool full_screen = g_full_screen_windows.count(hwnd) != 0;
     if (frameless)
       *proposed = window;
     else
-      proposed->top = window.top;
+      proposed->top = window.top + ((IsZoomed(hwnd) || full_screen) ? 0 : HiddenTopBorderInset());
     return result;
   }
   if (message == WM_NCCALCSIZE && wp) {
@@ -598,11 +619,12 @@ static std::optional<LRESULT> HandleHiddenTitleBarFrame(HWND hwnd, UINT message,
     const LRESULT result = DefSubclassProc(hwnd, message, wp, lp);
     // A full screen window keeps WS_MAXIMIZE when it was maximized, but it has no
     // frame to hang past the monitor and must cover the taskbar too.
-    if (!IsZoomed(hwnd) || g_full_screen_windows.count(hwnd)) {
+    const bool full_screen = g_full_screen_windows.count(hwnd) != 0;
+    if (!IsZoomed(hwnd) || full_screen) {
       if (frameless)
         params->rgrc[0] = proposed;
       else
-        params->rgrc[0].top = proposed.top;
+        params->rgrc[0].top = proposed.top + (full_screen ? 0 : HiddenTopBorderInset());
       return result;
     }
     // The maximized frame extends beyond the work area by its resize borders.

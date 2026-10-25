@@ -52,6 +52,12 @@ if(WIN32)
   target_link_libraries(window_popup_caption_windows_test PRIVATE nativeapi)
   add_test(NAME window_popup_caption_windows_test COMMAND window_popup_caption_windows_test)
   set_tests_properties(window_popup_caption_windows_test PROPERTIES TIMEOUT 20)
+  # leanflutter/window_manager#547 (#76): the hidden title bar keeps its top border on
+  # Windows 10, where the compositor draws the frame only on non-client area.
+  add_executable(window_hidden_frame_windows_test window_hidden_frame_windows_test.cpp)
+  target_link_libraries(window_hidden_frame_windows_test PRIVATE nativeapi)
+  add_test(NAME window_hidden_frame_windows_test COMMAND window_hidden_frame_windows_test)
+  set_tests_properties(window_hidden_frame_windows_test PROPERTIES TIMEOUT 20)
 endif()
 
 # SetMaximizeButtonBounds (#70): Windows hit testing and forwarding; unsupported elsewhere.
