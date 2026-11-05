@@ -2,8 +2,9 @@
 // border on all four sides. Windows 10 draws the frame only where the window still has
 // non-client area, so one pixel of the top sizing frame stays with the system there;
 // Windows 11 draws the border over the client area and leaves the client at the top edge.
-// A maximized or full screen window has no top strip. The window is shown without
-// activation at the bottom of the Z order; no input.
+// A maximized or full screen window has no top strip, and neither has an explicitly
+// frameless one, where no compositor frame is left to draw a border. The window is
+// shown without activation at the bottom of the Z order; no input.
 #include <windows.h>
 #include <iostream>
 #include "nativeapi.h"
@@ -128,6 +129,24 @@ int main() {
   Check(full.y == monitor.rcMonitor.top, "full screen starts at the top of the monitor");
   window.SetFullScreen(false);
   Pump();
+
+  // The frameless path never gets the strip, at any build: with no compositor frame
+  // there is no border for it to keep, and an inset would leave a 1px band that
+  // nothing paints. Only a pre-Windows 11 runner can catch an inset leaking here.
+  window.SetFrameless(true);
+  Pump();
+  Check(window.IsFrameless(), "it goes explicitly frameless");
+  GetWindowRect(root, &rect);
+  const POINT frameless = ClientOrigin(root);
+  Check(frameless.x == rect.left && frameless.y == rect.top,
+        "a frameless window has no strip: the client covers the whole window");
+  window.SetFrameless(false);
+  Pump();
+  Check(!window.IsFrameless(), "it leaves the frameless state");
+  GetWindowRect(root, &rect);
+  const POINT reframed = ClientOrigin(root);
+  Check(reframed.y - rect.top >= GetSystemMetrics(SM_CYCAPTION),
+        "leaving frameless restores the native caption");
 
   DestroyWindow(root);
   std::cout << (failures ? "FAILED" : "OK") << std::endl;
