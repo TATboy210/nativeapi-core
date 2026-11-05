@@ -28,6 +28,12 @@ add_executable(screen_layout_test screen_layout_test.cpp)
 target_link_libraries(screen_layout_test PRIVATE nativeapi)
 add_test(NAME screen_layout_test COMMAND screen_layout_test)
 
+# leanflutter/window_manager#547 (#76): plain arithmetic behind the hidden title bar's
+# top border inset; runs everywhere, so the Windows 10 path is covered on any runner.
+add_executable(window_top_border_inset_test window_top_border_inset_test.cpp)
+target_link_libraries(window_top_border_inset_test PRIVATE nativeapi)
+add_test(NAME window_top_border_inset_test COMMAND window_top_border_inset_test)
+
 # window_manager#412 / #572 (#75): Maximize() before the first show.
 if(WIN32)
   add_executable(tray_template_windows_test tray_template_windows_test.cpp)

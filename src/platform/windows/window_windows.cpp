@@ -17,6 +17,7 @@
 #include "../../window_manager.h"
 #include "../../window_registry.h"
 #include "dpi_utils_windows.h"
+#include "frame_metrics_windows.h"
 #include "string_utils_windows.h"
 #include "window_message_dispatcher.h"
 #include "../../window_property_dispatch.h"
@@ -412,10 +413,6 @@ static void ApplyTaskbarVisibility(HWND hwnd, bool is_visible) {
 }
 
 #ifndef NATIVEAPI_ENABLE_WINUI3
-// Windows 11 draws one thin border around the whole window, client area included;
-// earlier versions draw the frame only where the window still has non-client area.
-constexpr DWORD kBuildUniformWindowBorder = 22000;
-
 // Keep the native sizing/caption styles, but give the top non-client band to the
 // content (WM_NCCALCSIZE) when the title bar is hidden. While the compositor draws the
 // frame the rest of the sizing frame remains, and the top edge stays resizable through
@@ -423,20 +420,12 @@ constexpr DWORD kBuildUniformWindowBorder = 22000;
 // let the hit test through to it. Without the compositor's frame (no shadow, a custom
 // shadow, a shape) the content takes the whole window and every edge is hit-tested so.
 
-// Height of the top sizing frame left to the system while the title bar is hidden, in
-// physical pixels. Before Windows 11 the compositor draws the window border only on the
-// non-client area, so giving the whole caption band to the content (WM_NCCALCSIZE) takes
-// the top border with it while the left, right and bottom ones stay - windows hidden this
-// way on Windows 10 then show three sides of a frame and no top (window_manager#547). The
-// visible border is the outermost pixel of that frame at every scale, so one pixel is all
-// the compositor needs; the sizing frame inside it grows with the DPI but is invisible.
-// The content stops at the same line because it is laid out in the client area. Windows 11
-// draws the border over the client area itself, where an extra strip would only move the
-// content down.
+// Height of the top sizing frame left to the system while the title bar is hidden:
+// before Windows 11 the compositor draws the top border only on non-client area, so
+// giving it the whole caption band takes the border with it (window_manager#547). The
+// arithmetic lives in frame_metrics_windows.h so that any runner can test it.
 static int HiddenTopBorderInset() {
-  if (WindowsBuildNumber() >= kBuildUniformWindowBorder)
-    return 0;
-  return 1;
+  return frame_metrics::TopBorderInsetForBuild(WindowsBuildNumber());
 }
 
 // The resize hit code for a screen point on a resize edge of `root` that the system no

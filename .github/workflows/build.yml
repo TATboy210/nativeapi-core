@@ -237,10 +237,16 @@ jobs:
           cd build-ohos
           cmake --build . --config Release
 
-  # Windows build
+  # Windows builds. windows-latest (Server 2025, build >= 22000) draws the window
+  # border over the client area; windows-2022 (Server 2022, build 20348) is before
+  # Windows 11 and exercises the hidden title bar's 1px top border inset, the
+  # Windows 10 path of window_manager#547 (#76).
   build-windows:
-    runs-on: windows-latest
-    name: Build Windows
+    strategy:
+      matrix:
+        os: [windows-latest, windows-2022]
+    runs-on: ${{ matrix.os }}
+    name: Build Windows (${{ matrix.os }})
 
     steps:
       - uses: actions/checkout@v4
@@ -261,3 +267,12 @@ jobs:
         run: |
           cd build
           cmake --build . --config Release
+
+      # The hidden title bar frame regressions only: the inset arithmetic on every
+      # runner, and the window geometry on both border paths. The rest of the suite
+      # is not yet run in CI.
+      - name: Run hidden frame tests
+        shell: bash
+        run: |
+          cd build
+          ctest -C Release -R "^(window_hidden_frame_windows_test|window_top_border_inset_test)$" --output-on-failure
